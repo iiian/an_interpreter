@@ -37,6 +37,11 @@ export interface IfStatement extends Statement {
   if_elif_else: 'if'|'elif'|'else';
 }
 
+export interface IfElifElseBlockStatement extends Statement {
+  subtype: 'IfElifElseBlockStatement';
+  branches: IfStatement[];
+}
+
 export interface WhileStatement extends Statement {
   subtype: 'WhileStatement';
   condition: Expression;
@@ -53,6 +58,13 @@ export interface ForStatement extends Statement {
 }
 
 export class StatementFactory {
+  static createIfElifElseBlockStatement(logical_control_flow_statements: IfStatement[]): IfElifElseBlockStatement {
+    return {
+      type: 'Statement',
+      subtype: 'IfElifElseBlockStatement',
+      branches: logical_control_flow_statements
+    }
+  }
   static createForStatement(init: AssignmentStatement, condition: Expression, increment: AssignmentStatement, body: Statement[]): ForStatement {
     return {
       type: 'Statement',
@@ -90,7 +102,7 @@ export class StatementFactory {
       if_elif_else: 'else',
       condition: <LiteralExpression>{
         type: 'Expression',
-        subtype: 'LiteralExpression',
+        subtype: 'BooleanLiteralExpression',
         value: 'true'
       }
     };

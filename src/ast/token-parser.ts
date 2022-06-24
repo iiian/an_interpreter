@@ -1,6 +1,6 @@
 import { TokenStream } from './token-stream';
 import { match, Token } from "./token";
-import { AssignmentStatement, Statement, StatementFactory } from './statements';
+import { AssignmentStatement, IfStatement, Statement, StatementFactory, IfElifElseBlockStatement } from './statements';
 import { Expression, ExpressionFactory } from './expressions';
 import { PeekIterator } from '../util/peek-iterator';
 
@@ -25,26 +25,54 @@ export class TokenParser {
     // generator from tokens array
     const token_stream = this.token_stream.next();
     const token_generator = new PeekIterator((function* () {
-      yield  { type: 'reserved', value: 'function' };
-      yield  { type: 'identifier', value: '__main__' };
-      yield  { type: 'syntax', value: '(' };
-      yield  { type: 'syntax', value: ')' };
-      yield  { type: 'syntax', value: '{' };
+      // yield  { type: 'reserved', value: 'function' };
+      // yield  { type: 'identifier', value: '__main__' };
+      // yield  { type: 'syntax', value: '(' };
+      // yield  { type: 'syntax', value: ')' };
+      // yield  { type: 'syntax', value: '{' };
       yield* token_stream;
-      yield { type: 'reserved', value: 'return' };
-      yield { type: 'number_literal', value: '0' };
-      yield { type: 'semicolon' };
-      yield { type: 'syntax', value: '}' };
+      // yield { type: 'reserved', value: 'return' };
+      // yield { type: 'number_literal', value: '0' };
+      // yield { type: 'semicolon' };
+      // yield { type: 'syntax', value: '}' };
       yield { type: 'eof' };
     })());
 
     const statements: Statement[] = [];
+    let logical_control_flow_statements: IfStatement[] = [];
     while (token_generator.peek()?.type !== 'eof') {
       const next_statement = TokenParser.tryBuildStatement(token_generator);
+      if (next_statement.subtype === 'IfStatement') {
+        logical_control_flow_statements = this.handleIfStatementBlock(next_statement, logical_control_flow_statements, statements);
+        continue;
+      }
       statements.push(next_statement);
     }
-
+    if (logical_control_flow_statements.length) {
+      statements.push(StatementFactory.createIfElifElseBlockStatement(logical_control_flow_statements));
+    }
     return statements;
+  }
+
+  private handleIfStatementBlock(next_statement: Statement, logical_control_flow_statements: IfStatement[], statements: Statement[]) {
+    const if_statement = next_statement as IfStatement;
+    if (if_statement.if_elif_else === 'if') {
+      if (logical_control_flow_statements.length) {
+        statements.push(StatementFactory.createIfElifElseBlockStatement(logical_control_flow_statements));
+        logical_control_flow_statements = [if_statement];
+      } else {
+        logical_control_flow_statements.push(if_statement);
+      }
+    } else if (!logical_control_flow_statements.length) {
+      throw new Error(`Unexpected statement type: ${if_statement.if_elif_else}`);
+    } else if (if_statement.if_elif_else === 'elif') {
+      logical_control_flow_statements.push(if_statement);
+    } else if (if_statement.if_elif_else === 'else') {
+      logical_control_flow_statements.push(if_statement);
+      statements.push(StatementFactory.createIfElifElseBlockStatement(logical_control_flow_statements));
+      logical_control_flow_statements = [];
+    }
+    return logical_control_flow_statements;
   }
 
   static tryBuildStatement(token_stream: PeekIterator<Token>): Statement {
@@ -77,29 +105,40 @@ export class TokenParser {
   }
 
   static tryBuildAssignmentStatement(token_stream: PeekIterator<Token>): AssignmentStatement {
-    const identifier = token_stream.next().value;
+    const identifier: Token = token_stream.next().value;
     const expected_equality_token = token_stream.next().value;
     if (expected_equality_token.type !== 'syntax' && expected_equality_token.value !== '=') {
       throw new Error(`Expected '='`);
     }
-    const expr = TokenParser.tryBuildExpression(new PeekIterator(token_stream));
+    const expr = TokenParser.tryBuildExpression(token_stream);
     if (token_stream.next().value.type !== 'semicolon') {
       throw new Error(`Expected ';'`);
     }
-    return StatementFactory.createAssignmentStatement(identifier, expr);
+    return StatementFactory.createAssignmentStatement(identifier.value!, expr);
   }
 
   static tryBuildForStatement(token_stream: PeekIterator<Token>): Statement {
-    if (token_stream.next().value.type !== 'syntax' || token_stream.next().value.value !== '(') {
+    const expected_open_paren_token = token_stream.next().value;
+    if (expected_open_paren_token.type !== 'syntax' || expected_open_paren_token.value !== '(') {
       throw new Error('Expected (');
     }
+    const expected_let_token = token_stream.next().value;
+    if (expected_let_token.type !== 'reserved' || expected_let_token.value !== 'let') {
+      throw new Error('Expected let');
+    }
     const initializer_expression = TokenParser.tryBuildAssignmentStatement(token_stream);
-    const condition_expression = TokenParser.tryBuildExpression(new PeekIterator(token_stream));
-    if (token_stream.next().value.type !== 'syntax' || token_stream.next().value.value !== ';') {
+    const condition_expression = TokenParser.tryBuildExpression(token_stream);
+    const expected_semicolon_token = token_stream.next().value;
+    if (expected_semicolon_token.type !== 'semicolon') {
       throw new Error('Expected ;');
     }
-    const increment_statement = TokenParser.tryBuildAssignmentStatement(new PeekIterator(token_stream));
-    if (token_stream.next().value.type !== 'syntax' || token_stream.next().value.value !== ')') {
+    const second_expected_let_token = token_stream.next().value;
+    if (second_expected_let_token.type !== 'reserved' || second_expected_let_token.value !== 'let') {
+      throw new Error('Expected let');
+    }
+    const increment_statement = TokenParser.tryBuildAssignmentStatement(token_stream);
+    const expected_close_paren_token = token_stream.next().value;
+    if (expected_close_paren_token.type !== 'syntax' || expected_close_paren_token.value !== ')') {
       throw new Error('Expected )');
     }
     const block = TokenParser.tryBuildBlock(token_stream);
@@ -107,26 +146,27 @@ export class TokenParser {
   }
 
   static tryBuildWhileStatement(token_stream: PeekIterator<Token>): Statement {
-    const expr = TokenParser.tryBuildExpression(new PeekIterator(token_stream));
+    const expr = TokenParser.tryBuildExpression(token_stream);
     const block = TokenParser.tryBuildBlock(token_stream);
     return StatementFactory.createWhileStatement(expr, block);
   }
 
   static tryBuildBlock(token_stream: PeekIterator<Token>): Statement[] {
-    if (token_stream.next().value.type !== 'syntax' || token_stream.next().value.value !== '{') {
+    const expected_open_brace_token = token_stream.next().value;
+    if (expected_open_brace_token.type !== 'syntax' || expected_open_brace_token.value !== '{') {
       throw new Error('Expected {');
     }
     const statements: Statement[] = [];
-    while (token_stream.next().value.type !== 'syntax' || token_stream.next().value.value !== '}') {
+    while (token_stream.peek()!.type !== 'syntax' || token_stream.peek()!.value !== '}') {
       const next_statement = TokenParser.tryBuildStatement(token_stream);
       statements.push(next_statement);
     }
-
+    token_stream.next();
     return statements;
   }
 
   static tryBuildIfStatement(token_stream: PeekIterator<Token>, is_elif: boolean = false): Statement {
-    const expr = TokenParser.tryBuildExpression(new PeekIterator(token_stream));
+    const expr = TokenParser.tryBuildExpression(token_stream);
     const block = TokenParser.tryBuildBlock(token_stream);
     return StatementFactory.createIfStatement(expr, block, is_elif);
   }
@@ -137,7 +177,11 @@ export class TokenParser {
   }
 
   static tryBuildReturnStatement(token_stream: PeekIterator<Token>): Statement {
-    const expr = TokenParser.tryBuildExpression(new PeekIterator(token_stream));
+    const expr = TokenParser.tryBuildExpression(token_stream);
+    const expected_semicolon = token_stream.next().value;
+    if (expected_semicolon.type !== 'semicolon') {
+      throw new Error(`Expected ';' after return statement expression, got ${expected_semicolon.value}`);
+    }
     return StatementFactory.createReturnStatement(expr);
   }
 
@@ -159,8 +203,9 @@ export class TokenParser {
         break;
       }
     }
-    if (token_stream.next().value.value !== '}') {
-      throw new Error('Expected }');
+    const expected_close_paren = token_stream.next().value.value;
+    if (expected_close_paren !== '}') {
+      throw new Error(`Expected } but got ${expected_close_paren}`);
     }
     return StatementFactory.createFunctionStatement(function_name, function_params, function_body);
   }
@@ -175,14 +220,18 @@ export class TokenParser {
     const next_token = tokens.next().value;
     switch (next_token.type) {
       case 'string_literal':
+        return ExpressionFactory.createLiteralExpression(next_token.value, 'StringLiteralExpression');
       case 'number_literal':
-        return ExpressionFactory.createLiteralExpression(next_token.value!);
+        return ExpressionFactory.createLiteralExpression(next_token.value!, 'NumberLiteralExpression');
+      case 'boolean_literal':
+        return ExpressionFactory.createLiteralExpression(next_token.value!, 'BooleanLiteralExpression');
       case 'identifier':
         const peek_next_token = tokens.peek()!;
         if (peek_next_token.type === 'syntax' && peek_next_token.value === '(') {
+          tokens.next(); // consume the '('
           return TokenParser.tryBuildFunctionCallExpression(next_token.value, tokens);
         }
-        return ExpressionFactory.createIdentifierExpression(tokens.next().value.value!);
+        return ExpressionFactory.createIdentifierExpression(next_token.value!);
       case 'syntax': {
         if (next_token.value === '(') {
           const expression = TokenParser.tryBuildExpression(tokens);
