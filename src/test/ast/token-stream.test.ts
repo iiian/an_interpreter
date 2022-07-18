@@ -139,5 +139,25 @@ describe('StringTokenStream', () => {
         }
       ])
     });
+    it('should generate a stream of tokens for function definitions', () => {
+      const stream = new StringTokenStream('function foo(x, y) { return x + y; }');
+      const tokens = [...stream.next()];
+      expect(tokens).toEqual([
+        { type: 'reserved', value: 'function' },
+        { type: 'identifier', value: 'foo' },
+        { type: 'syntax', value: '(' },
+        { type: 'identifier', value: 'x' },
+        { type: 'syntax', value: ',' },
+        { type: 'identifier', value: 'y' },
+        { type: 'syntax', value: ')' },
+        { type: 'syntax', value: '{' },
+        { type: 'reserved', value: 'return' },
+        { type: 'identifier', value: 'x' },
+        { type: 'syntax', value: '+' },
+        { type: 'identifier', value: 'y' },
+        { type: 'semicolon' },
+        { type: 'syntax', value: '}' },
+      ]);
+    });
   });
 });

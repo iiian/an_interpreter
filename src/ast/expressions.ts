@@ -4,7 +4,7 @@ export interface Expression {
 }
 
 export interface LiteralExpression extends Expression {
-  subtype: 'LiteralExpression';
+  subtype: 'NumberLiteralExpression'|'StringLiteralExpression'|'BooleanLiteralExpression';
   value: string;
 }
 
@@ -41,10 +41,10 @@ export interface UnaryExpression extends Expression {
 }
 
 export class ExpressionFactory {
-  static createLiteralExpression(value: string): LiteralExpression {
+  static createLiteralExpression(value: string, type: 'StringLiteralExpression'|'NumberLiteralExpression'|'BooleanLiteralExpression'): LiteralExpression {
     return {
       type: 'Expression',
-      subtype: 'LiteralExpression',
+      subtype: type,
       value: value
     };
   }

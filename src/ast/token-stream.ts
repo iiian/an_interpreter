@@ -116,6 +116,20 @@ export class StringTokenStream implements TokenStream {
         };
         this.pos += 'else'.length;
       }
+      else if (StringTokenStream.sliceEquals(this.str, this.pos, 'true')) {
+        yield {
+          type: 'boolean_literal',
+          value: 'true'
+        };
+        this.pos += 'true'.length;
+      }
+      else if (StringTokenStream.sliceEquals(this.str, this.pos, 'false')) {
+        yield {
+          type: 'boolean_literal',
+          value: 'false'
+        };
+        this.pos += 'false'.length;
+      }
       else if (/[_\w]/.test(next_token)) {
         let next_end = this.pos;
         while (next_end <= this.str.length && /[_\w\d]/.test(this.str[next_end++])) {}
@@ -123,7 +137,7 @@ export class StringTokenStream implements TokenStream {
           type: 'identifier',
           value: this.str.slice(this.pos, next_end-1)
         };
-        this.pos = next_end;
+        this.pos = next_end-1;
       }
       else {
         throw new Error('unexpected untokenizable text encountered: ' + this.str.slice(this.pos, this.pos+10));

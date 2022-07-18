@@ -4,12 +4,18 @@ import { State } from './state';
 export class ExpressionEvaluator {
   static evaluate(expression: Expression, state: State): any {
     switch (expression.subtype) {
-      case 'LiteralExpression':
+      case 'StringLiteralExpression':
         const lit_expr = expression as LiteralExpression;
         return lit_expr.value;
+      case 'NumberLiteralExpression':
+        const num_expr = expression as LiteralExpression;
+        return Number(num_expr.value);
+      case 'BooleanLiteralExpression':
+        const bool_expr = expression as LiteralExpression;
+        return bool_expr.value === 'true';
       case 'IdentifierExpression':
         const var_expr = expression as IdentifierExpression;
-        return state.variables[var_expr.name];
+        return state.getVariable(var_expr.name);
       case 'FunctionCallExpression':
         throw new Error('Function calls are meant to be analyzed by the interpreter');
       case 'UnaryExpression':
